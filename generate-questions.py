@@ -28,6 +28,10 @@ def get_questions_list(
     print(question_3)
     question_list.append(question_3)
 
+    question_4 = get_question_4(principal_1, interest_rate_1, principal_2, interest_rate_2, term=term_1)
+    print(question_4)
+    question_list.append(question_4)
+
 
 def get_question_1(principal, interest_rate, term):
     """
@@ -85,7 +89,27 @@ def get_question_3(principal, interest_rate, term, month_number):
     }
     return question
 
-def get_question_4()
+def get_question_4(principal_1, interest_rate_1, principal_2, interest_rate_2, term):
+    """
+    Calculates the incremental interest rate (cost of borrowing) on an additional amount when increasing loan size and rate.
+    Args:
+        principal_1 (float): Original loan amount.
+        interest_rate_1 (float): Interest rate for original loan.
+        principal_2 (float): New loan amount (original + extra).
+        interest_rate_2 (float): Interest rate for new loan.
+        term (int): Loan term in years.
+    Returns:
+        dict: Question and answer about the incremental interest rate.
+    """
+    extra_amount = principal_2 - principal_1
+    print(principal_1, interest_rate_1, principal_2, interest_rate_2, term, extra_amount)
+    answer = find_incremental_rate(principal_1, interest_rate_1, term, principal_2, interest_rate_2)
+    question = {
+        "role": "user",
+        "content": f"What's the incremental interest rate (cost of borrowing) on an additional ${extra_amount:,.0f} if I go from a ${principal_1:,.0f} loan at {interest_rate_1:.2f}% to a ${principal_2:,.0f} loan at {interest_rate_2:.2f}%, both for {term} years? Can you solve for the interest rate that would give the same payment difference on just the ${extra_amount:,.0f}?",
+        "answer": round(answer, 2),
+    }
+    return question
 
 
 get_questions_list(

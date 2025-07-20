@@ -1,3 +1,6 @@
+from scipy import optimize
+
+
 def calculate_monthly_payment(principal, annual_interest_rate, loan_term_years):
     """
     Calculate monthly payment for a fully amortized loan.
@@ -36,7 +39,9 @@ def calculate_remaining_balance(
     Returns:
         Remaining balance
     """
-    payment = calculate_monthly_payment(principal, annual_interest_rate, loan_term_years)
+    payment = calculate_monthly_payment(
+        principal, annual_interest_rate, loan_term_years
+    )
     monthly_interest_rate = annual_interest_rate / 12 / 100
     payments_made = years_elapsed * 12
 
@@ -66,7 +71,9 @@ def calculate_interest_principal_payment(
         Tuple of (interest_payment, principal_payment)
     """
     monthly_interest_rate = annual_interest_rate / 12 / 100
-    payment = calculate_monthly_payment(principal, annual_interest_rate, loan_term_years)
+    payment = calculate_monthly_payment(
+        principal, annual_interest_rate, loan_term_years
+    )
 
     if month_number > 1:
         months_elapsed = month_number - 1
@@ -82,3 +89,27 @@ def calculate_interest_principal_payment(
     principal_payment = payment - interest_payment
 
     return interest_payment, principal_payment
+
+
+def find_incremental_rate(
+    principal_1,
+    interest_rate_1,
+    term,
+    principal_2,
+    interest_rate_2,
+):
+
+    incremental_principal = principal_2 - principal_1
+    payment_1 = calculate_monthly_payment(principal_1, interest_rate_1, term)
+    payment_2 = calculate_monthly_payment(principal_2, interest_rate_2, term)
+    incremental_payment = payment_2 - payment_1
+
+    def payment_function(rate_percent):
+        monthly_rate = rate_percent / 12 / 100
+        num_payments = term * 12
+        return (monthly_rate * incremental_principal) / (
+            1 - (1 + monthly_rate) ** (-num_payments)
+        ) - incremental_payment
+
+    result = optimize.newton(payment_function, 5.0, tol=1e-8, maxiter=100)
+    return float(result)
