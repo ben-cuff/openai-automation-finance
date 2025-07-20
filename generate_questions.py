@@ -60,9 +60,7 @@ def get_questions_list(
     )
     question_list.append(question_6)
 
-    print(question_6)
-
-    # print(json.dumps(question_list, indent=2))
+    return question_list
 
 
 def get_question_1(principal, interest_rate, term):
@@ -220,6 +218,24 @@ def get_question_6(
     fee,
     out_of_pocket,
 ):
+    """
+    Generates a mortgage refinancing question and computes the net present value (NPV) savings or loss.
+    Args:
+        principal (float): The original amount of the mortgage.
+        term_1 (int): The original term of the mortgage in years.
+        rate_1 (float): The original annual interest rate (as a percentage).
+        years_elapsed (int): The number of years since the mortgage was taken out.
+        term_2 (int): The term of the new mortgage in years.
+        rate_2 (float): The annual interest rate for the new mortgage (as a percentage).
+        penalty_rate (float): The penalty rate (as a percentage of the remaining principal) for breaking the original mortgage.
+        fee (float): Additional refinancing fees in dollars.
+        out_of_pocket (bool): Indicates whether fees and penalties are paid out of pocket (True) or rolled into the new loan (False).
+    Returns:
+        dict: A dictionary containing:
+            - "role": The role of the message sender ("user").
+            - "content": The generated question string describing the refinancing scenario.
+            - "answer": The calculated NPV savings (or loss, as a negative number) rounded to two decimal places.
+    """
     answer = calculate_refinance_npv(
         principal,
         term_1,
@@ -240,30 +256,9 @@ def get_question_6(
             f"Today, I could get a new {term_2}-year mortgage at {rate_2:.2f}% interest, "
             f"but I’d have to pay a penalty of {penalty_rate:.0f}% of what I still owe, "
             f"plus another ${fee:,.0f} in fees. "
-            f"({'Fees and penalties are paid out of pocket.' if out_of_pocket else 'Fees and penalties are rolled into the new loan.'}) " # Not sure if this even matters, doesn't change NPV
+            f"({'Fees and penalties are paid out of pocket.' if out_of_pocket else 'Fees and penalties are rolled into the new loan.'}) "  # Not sure if this even matters, doesn't change NPV
             f"If I weigh all future payments and costs as if they happened today, how much would I save over the term of the loan if I refinance (output loss as a negative number)?"
         ),
         "answer": round(answer, 2),
     }
     return question
-
-
-get_questions_list(
-    principal_1=300000,
-    interest_rate_1=2.99,
-    term_1=30,
-    years_elapsed_1=5,
-    month_number_1=30,
-    principal_2=320000,
-    interest_rate_2=3.51,
-    term_2=30,
-    years_elapsed_2=5,
-    extra_amount=20000,
-    penalty_rate=2,
-    fees=3000,
-    out_of_pocket=True,
-    principal_a2=150000,
-    rate_a2=6.75,
-    principal_b=450000,
-    rate_b=4.22,
-)
