@@ -49,7 +49,21 @@ ai_models = [
 ]
 
 
-def run_ai_tests(question_list, num_iterations=1, ai_model=ai_models[6]):
+def run_ai_tests(question_list, num_iterations=1, ai_model="o3-mini"):
+    """
+    Runs a series of AI-powered tests on a list of finance-related questions, specifically focused on mortgage calculations.
+    Args:
+        question_list (list): A list of dictionaries, each containing a 'content' key with the question text and an 'answer' key with the expected answer.
+        num_iterations (int, optional): The number of times to repeat the test set. Defaults to 1.
+        ai_model (str, optional): The identifier of the AI model to use for generating responses. o3-mini.
+    Returns:
+        list: A list of dictionaries, each containing:
+            - 'question': The question text.
+            - 'expected_answer': The expected answer for the question.
+            - 'ai_response': The full response from the AI model.
+            - 'actual_answer': The numeric answer extracted from the AI's response.
+    """
+
     messages = [
         (
             [
