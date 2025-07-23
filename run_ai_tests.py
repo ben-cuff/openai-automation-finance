@@ -5,6 +5,7 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import re
 import json
+from enum import Enum
 
 executor = ThreadPoolExecutor()
 
@@ -77,25 +78,26 @@ questions_list_3 = get_questions_list(
 
 questions_list = questions_list_1 + questions_list_2 + questions_list_3
 
-ai_models = [
-    "deepseek-chat",  # 0
-    "gpt-3.5-turbo",  # 1
-    "gpt-4",  # 2
-    "o1-mini",  # 3
-    "gpt-4o",  # 4
-    "gpt-4o-mini",  # 5
-    "o3-mini",  # 6
-    "o1",  # 7
-    "o1-preview",  # 8
-    "gpt-4.5-preview",  # 9
-    "gpt-4.1" # 10
-]
+
+class AIModels(Enum):
+    DEEPSEEK_CHAT = "deepseek-chat"
+    GPT_3_5_TURBO = "gpt-3.5-turbo"
+    GPT_4 = "gpt-4"
+    O1_MINI = "o1-mini"
+    O4_MINI = "o4-mini"
+    GPT_4O = "gpt-4o"
+    GPT_4O_MINI = "gpt-4o-mini"
+    O3_MINI = "o3-mini"
+    O1 = "o1"
+    O1_PREVIEW = "o1-preview"
+    GPT_4_5_PREVIEW = "gpt-4.5-preview"
+    GPT_4_1 = "gpt-4.1"
 
 
 def run_ai_tests(
     question_list,
     num_iterations=1,
-    ai_model="o3-mini",
+    ai_model=AIModels.O3_MINI,
     use_assistant=False,
     output_file="ai_responses.json",
 ):
@@ -148,6 +150,7 @@ def run_ai_tests(
         "money signs ($), or any ambiguous text. Only include the number like @@@-185000@@@. "
         "The answer does not need to be your only output, just make sure that your final answer is wrapped in @@@. "
         "Please also explain your answer, so if you get it wrong we can try to see where things went wrong. "
+        "If you save money, it should be a positive number, if you lose money, make sure it is negative. "
         "You can use Python code to perform calculations and explain your reasoning."
     )
 
@@ -183,7 +186,7 @@ def run_ai_tests(
         print(f"Finished question: {message[1]}")
         return (response.choices[0].message.content, message[1])
 
-    print(f"Running {len(messages)} questions")
+    print(f"Running {len(messages)} questions, with {ai_model}")
     futures = [executor.submit(get_response, message) for message in messages]
     responses_parallel = [future.result() for future in futures]
 
@@ -200,21 +203,26 @@ def run_ai_tests(
 
     results = []
     for idx, (resp, _) in enumerate(responses_parallel):
+        try:
+            actual_answer = float(answers[idx])
+        except (TypeError, ValueError):
+            actual_answer = None
         result = {
             "question": question_list[idx % len(question_list)]["content"],
             "expected_answer": question_list[idx % len(question_list)]["answer"],
             "ai_response": resp,
-            "actual_answer": float(answers[idx]),
+            "actual_answer": actual_answer,
         }
         results.append(result)
     with open(output_file, "w") as f:
         json.dump(results, f, indent=2)
     return results
 
+
 ai_responses = run_ai_tests(
     questions_list,
     num_iterations=4,
-    ai_model=ai_models[10],
+    ai_model=AIModels.GPT_4_1.value,
     use_assistant=True,
     output_file="assistant_with_python.json",
 )
@@ -222,7 +230,15 @@ ai_responses = run_ai_tests(
 ai_responses = run_ai_tests(
     questions_list,
     num_iterations=4,
-    ai_model=ai_models[10],
+    ai_model=AIModels.GPT_4_1.value,
     use_assistant=False,
     output_file="assistant_without_python.json",
+)
+
+ai_responses = run_ai_tests(
+    questions_list,
+    num_iterations=4,
+    ai_model=AIModels.O4_MINI.value,
+    use_assistant=False,
+    output_file="o4-mini-responses.json",
 )
