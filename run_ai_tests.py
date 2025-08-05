@@ -90,6 +90,20 @@ SYSTEM_MESSAGE = (
     "Please also explain your answer, so if you get it wrong we can try to see where things went wrong."
 )
 
+ASSISTANT_INSTRUCTIONS = (
+    "You are trying to help people that are not very knowledgeable about finance answer questions about their mortgage. "
+    "Answer the questions to the best of your ability, and make sure to get the calculations correct. "
+    "Format the answer like @@@answer_here@@@. For example, if your final answer was 158, you would include @@@158@@@. "
+    "Only include one instance of @@@xyz@@@ in your response as this will be used to automatically parse for your final answer. "
+    "Make sure to only wrap your final answer in @@@ and not anything else during your response. "
+    "Only include the number in your final response. @@@answer@@@ should not include any commas (,), percent signs (%),"
+    "money signs ($), or any ambiguous text. Only include the number like @@@-185000@@@. "
+    "The answer does not need to be your only output, just make sure that your final answer is wrapped in @@@. "
+    "Please also explain your answer, so if you get it wrong we can try to see where things went wrong. "
+    "If you save money, it should be a positive number, if you lose money, make sure it is negative. "
+    "You can use Python code to perform calculations and explain your reasoning."
+)
+
 
 class AIModels(Enum):
     DEEPSEEK_CHAT = "deepseek-chat"
@@ -144,26 +158,12 @@ def run_ai_tests(
         for idx, msg in enumerate(question_list)
     ]
 
-    assistant_instructions = (
-        "You are trying to help people that are not very knowledgeable about finance answer questions about their mortgage. "
-        "Answer the questions to the best of your ability, and make sure to get the calculations correct. "
-        "Format the answer like @@@answer_here@@@. For example, if your final answer was 158, you would include @@@158@@@. "
-        "Only include one instance of @@@xyz@@@ in your response as this will be used to automatically parse for your final answer. "
-        "Make sure to only wrap your final answer in @@@ and not anything else during your response. "
-        "Only include the number in your final response. @@@answer@@@ should not include any commas (,), percent signs (%),"
-        "money signs ($), or any ambiguous text. Only include the number like @@@-185000@@@. "
-        "The answer does not need to be your only output, just make sure that your final answer is wrapped in @@@. "
-        "Please also explain your answer, so if you get it wrong we can try to see where things went wrong. "
-        "If you save money, it should be a positive number, if you lose money, make sure it is negative. "
-        "You can use Python code to perform calculations and explain your reasoning."
-    )
-
     def get_response(message):
         if use_assistant:
             response = client.responses.create(
                 model=ai_model,
                 tools=[{"type": "code_interpreter", "container": {"type": "auto"}}],
-                instructions=assistant_instructions,
+                instructions=ASSISTANT_INSTRUCTIONS,
                 input=message[0][1]["content"],
             )
             combined_text = ""
