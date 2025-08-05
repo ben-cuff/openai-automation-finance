@@ -48,6 +48,18 @@ ai_models = [
     "gpt-4.5-preview",  # 9
 ]
 
+SYSTEM_MESSAGE = (
+    "You are trying to help people that are not very knowledgeable about finance answer questions about their mortgage. "
+    "Answer the questions to the best of your ability, and make sure to get the calculations correct. "
+    "Format the answer like @@@answer_here@@@. For example, if your final answer was 158, you would include @@@158@@@. "
+    "Only include one instance of @@@xyz@@@ in your response as this will be used to automatically parse for your final answer. "
+    "Make sure to only wrap your final answer in @@@ and not anything else during your response. "
+    "Only include the number in your final response. @@@answer@@@ should not include any commas (,), percent signs (%),"
+    "money signs ($), or any ambiguous text. Only include the number like @@@-185000@@@. "
+    "The answer does not need to be your only output, just make sure that your final answer is wrapped in @@@. "
+    "Please also explain your answer, so if you get it wrong we can try to see where things went wrong."
+)
+
 
 def run_ai_tests(question_list, num_iterations=1, ai_model="o3-mini"):
     """
@@ -69,15 +81,7 @@ def run_ai_tests(question_list, num_iterations=1, ai_model="o3-mini"):
             [
                 {
                     "role": "system",
-                    "content": "You are trying to help people that are not very knowledgeable about finance answer questions about their mortgage. "
-                    + "Answer the questions to the best of your ability, and make sure to get the calculations correct. "
-                    + "Format the answer like @@@answer_here@@@. For example, if your final answer was 158, you would include @@@158@@@. "
-                    + "Only include one instance of @@@xyz@@@ in your response as this will be used to automatically parse for your final answer. "
-                    + "Make sure to only wrap your final answer in @@@ and not anything else during your response. "
-                    + "Only include the number in your final response. @@@answer@@@ should not include any commas (,), percent signs (%),"
-                    + "money signs ($), or any ambiguous text. Only include the number like @@@-185000@@@. "
-                    + "The answer does not need to be your only output, just make sure that your final answer is wrapped in @@@. "
-                    + "Please also explain your answer, so if you get it wrong we can try to see where things went wrong.",
+                    "content": SYSTEM_MESSAGE,
                 },
                 {"role": msg["role"], "content": msg["content"]},
             ],
