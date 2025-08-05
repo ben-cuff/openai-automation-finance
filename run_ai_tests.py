@@ -5,6 +5,7 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import re
 import json
+from enum import Enum
 
 executor = ThreadPoolExecutor()
 
@@ -15,7 +16,7 @@ openai_url = "https://api.openai.com/v1"
 
 client = OpenAI(api_key=openai_api_key, base_url=openai_url)
 
-questions_list = get_questions_list(
+questions_list_1 = get_questions_list(
     principal_1=300000,
     interest_rate_1=2.99,
     term_1=30,
@@ -35,18 +36,47 @@ questions_list = get_questions_list(
     rate_b=4.22,
 )
 
-ai_models = [
-    "deepseek-chat",  # 0
-    "gpt-3.5-turbo",  # 1
-    "gpt-4",  # 2
-    "o1-mini",  # 3
-    "gpt-4o",  # 4
-    "gpt-4o-mini",  # 5
-    "o3-mini",  # 6
-    "o1",  # 7
-    "o1-preview",  # 8
-    "gpt-4.5-preview",  # 9
-]
+questions_list_2 = get_questions_list(
+    principal_1=250000,
+    interest_rate_1=3.25,
+    term_1=20,
+    years_elapsed_1=3,
+    month_number_1=24,
+    principal_2=270000,
+    interest_rate_2=3.75,
+    term_2=25,
+    years_elapsed_2=4,
+    extra_amount=15000,
+    penalty_rate=1.5,
+    fees=2500,
+    out_of_pocket=False,
+    principal_a2=120000,
+    rate_a2=5.5,
+    principal_b=350000,
+    rate_b=3.95,
+)
+
+questions_list_3 = get_questions_list(
+    principal_1=400000,
+    interest_rate_1=3.85,
+    term_1=25,
+    years_elapsed_1=7,
+    month_number_1=60,
+    principal_2=420000,
+    interest_rate_2=4.1,
+    term_2=30,
+    years_elapsed_2=6,
+    extra_amount=25000,
+    penalty_rate=1.75,
+    fees=3500,
+    out_of_pocket=True,
+    principal_a2=180000,
+    rate_a2=7.25,
+    principal_b=500000,
+    rate_b=4.5,
+)
+
+questions_list = questions_list_1 + questions_list_2 + questions_list_3
 
 SYSTEM_MESSAGE = (
     "You are trying to help people that are not very knowledgeable about finance answer questions about their mortgage. "
@@ -61,13 +91,36 @@ SYSTEM_MESSAGE = (
 )
 
 
-def run_ai_tests(question_list, num_iterations=1, ai_model="o3-mini"):
+class AIModels(Enum):
+    DEEPSEEK_CHAT = "deepseek-chat"
+    GPT_3_5_TURBO = "gpt-3.5-turbo"
+    GPT_4 = "gpt-4"
+    O1_MINI = "o1-mini"
+    O4_MINI = "o4-mini"
+    GPT_4O = "gpt-4o"
+    GPT_4O_MINI = "gpt-4o-mini"
+    O3_MINI = "o3-mini"
+    O1 = "o1"
+    O1_PREVIEW = "o1-preview"
+    GPT_4_5_PREVIEW = "gpt-4.5-preview"
+    GPT_4_1 = "gpt-4.1"
+
+
+def run_ai_tests(
+    question_list,
+    num_iterations=1,
+    ai_model=AIModels.O3_MINI,
+    use_assistant=False,
+    output_file="ai_responses.json",
+):
     """
     Runs a series of AI-powered tests on a list of finance-related questions, specifically focused on mortgage calculations.
     Args:
         question_list (list): A list of dictionaries, each containing a 'content' key with the question text and an 'answer' key with the expected answer.
         num_iterations (int, optional): The number of times to repeat the test set. Defaults to 1.
         ai_model (str, optional): The identifier of the AI model to use for generating responses. o3-mini.
+        use_assistant: Whether or not to use the assistants API and thus the code interpreter
+        output_file: The filename to output responses to
     Returns:
         list: A list of dictionaries, each containing:
             - 'question': The question text.
@@ -91,7 +144,39 @@ def run_ai_tests(question_list, num_iterations=1, ai_model="o3-mini"):
         for idx, msg in enumerate(question_list)
     ]
 
+    assistant_instructions = (
+        "You are trying to help people that are not very knowledgeable about finance answer questions about their mortgage. "
+        "Answer the questions to the best of your ability, and make sure to get the calculations correct. "
+        "Format the answer like @@@answer_here@@@. For example, if your final answer was 158, you would include @@@158@@@. "
+        "Only include one instance of @@@xyz@@@ in your response as this will be used to automatically parse for your final answer. "
+        "Make sure to only wrap your final answer in @@@ and not anything else during your response. "
+        "Only include the number in your final response. @@@answer@@@ should not include any commas (,), percent signs (%),"
+        "money signs ($), or any ambiguous text. Only include the number like @@@-185000@@@. "
+        "The answer does not need to be your only output, just make sure that your final answer is wrapped in @@@. "
+        "Please also explain your answer, so if you get it wrong we can try to see where things went wrong. "
+        "If you save money, it should be a positive number, if you lose money, make sure it is negative. "
+        "You can use Python code to perform calculations and explain your reasoning."
+    )
+
     def get_response(message):
+        if use_assistant:
+            response = client.responses.create(
+                model=ai_model,
+                tools=[{"type": "code_interpreter", "container": {"type": "auto"}}],
+                instructions=assistant_instructions,
+                input=message[0][1]["content"],
+            )
+            combined_text = ""
+            for item in response.output:
+                if hasattr(item, "content"):
+                    for content_item in item.content:
+                        if hasattr(content_item, "text"):
+                            combined_text += content_item.text + "\n"
+                elif hasattr(item, "code"):
+                    combined_text += item.code + "\n"
+            print(f"Finished question: {message[1]}")
+            return (combined_text, message[1])
+
         temperature = 1
         max_completion_tokens = 20000
         reasoning_effort = ["low", "medium", "high"]
@@ -105,7 +190,7 @@ def run_ai_tests(question_list, num_iterations=1, ai_model="o3-mini"):
         print(f"Finished question: {message[1]}")
         return (response.choices[0].message.content, message[1])
 
-    print(f"Running {len(messages)} questions")
+    print(f"Running {len(messages)} questions, with {ai_model}")
     futures = [executor.submit(get_response, message) for message in messages]
     responses_parallel = [future.result() for future in futures]
 
@@ -122,17 +207,42 @@ def run_ai_tests(question_list, num_iterations=1, ai_model="o3-mini"):
 
     results = []
     for idx, (resp, _) in enumerate(responses_parallel):
+        try:
+            actual_answer = float(answers[idx])
+        except (TypeError, ValueError):
+            actual_answer = None
         result = {
             "question": question_list[idx % len(question_list)]["content"],
             "expected_answer": question_list[idx % len(question_list)]["answer"],
             "ai_response": resp,
-            "actual_answer": float(answers[idx]),
+            "actual_answer": actual_answer,
         }
         results.append(result)
+    with open(output_file, "w") as f:
+        json.dump(results, f, indent=2)
     return results
 
 
-ai_responses = run_ai_tests(questions_list, num_iterations=2)
+ai_responses = run_ai_tests(
+    questions_list,
+    num_iterations=4,
+    ai_model=AIModels.GPT_4_1.value,
+    use_assistant=True,
+    output_file="assistant_with_python.json",
+)
 
-with open("ai_responses.json", "w") as f:
-    json.dump(ai_responses, f, indent=2)
+ai_responses = run_ai_tests(
+    questions_list,
+    num_iterations=4,
+    ai_model=AIModels.GPT_4_1.value,
+    use_assistant=False,
+    output_file="assistant_without_python.json",
+)
+
+ai_responses = run_ai_tests(
+    questions_list,
+    num_iterations=4,
+    ai_model=AIModels.O4_MINI.value,
+    use_assistant=False,
+    output_file="o4-mini-responses.json",
+)
