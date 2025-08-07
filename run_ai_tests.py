@@ -176,19 +176,19 @@ def run_ai_tests(
                     combined_text += item.code + "\n"
             print(f"Finished question: {message[1]}")
             return (combined_text, message[1])
-
-        temperature = 1
-        max_completion_tokens = 20000
-        reasoning_effort = ["low", "medium", "high"]
-        response = client.chat.completions.create(
-            model=ai_model,
-            temperature=temperature,
-            # max_completion_tokens=max_completion_tokens,
-            messages=message[0],
-            # reasoning_effort=reasoning_effort[1]
-        )
-        print(f"Finished question: {message[1]}")
-        return (response.choices[0].message.content, message[1])
+        else:
+            temperature = 1
+            max_completion_tokens = 20000
+            reasoning_effort = ["low", "medium", "high"]
+            response = client.chat.completions.create(
+                model=ai_model,
+                temperature=temperature,
+                # max_completion_tokens=max_completion_tokens,
+                messages=message[0],
+                # reasoning_effort=reasoning_effort[1]
+            )
+            print(f"Finished question: {message[1]}")
+            return (response.choices[0].message.content, message[1])
 
     print(f"Running {len(messages)} questions, with {ai_model}")
     futures = [executor.submit(get_response, message) for message in messages]
