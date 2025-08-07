@@ -10,7 +10,7 @@ def calculate_monthly_payment(principal, annual_interest_rate, loan_term_years):
     Args:
         principal: The loan amount
         annual_interest_rate: Annual interest rate as a decimal (e.g., 9.00 for 9%)
-        loan_term_years: Loan term in years
+        loan_term_years: Loan term in year
 
     Returns:
         Monthly payment amount
