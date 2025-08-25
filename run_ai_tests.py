@@ -2,6 +2,7 @@ from generate_questions import get_questions_list
 from openai import OpenAI
 import dotenv
 import pandas as pd
+from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor
 import re
 import json
@@ -78,30 +79,23 @@ questions_list_3 = get_questions_list(
 
 questions_list = questions_list_1 + questions_list_2 + questions_list_3
 
-SYSTEM_MESSAGE = (
+ASSISTANT_INSTRUCTIONS_CODE = (
     "You are trying to help people that are not very knowledgeable about finance answer questions about their mortgage. "
     "Answer the questions to the best of your ability, and make sure to get the calculations correct. "
-    "Format the answer like @@@answer_here@@@. For example, if your final answer was 158, you would include @@@158@@@. "
-    "Only include one instance of @@@xyz@@@ in your response as this will be used to automatically parse for your final answer. "
-    "Make sure to only wrap your final answer in @@@ and not anything else during your response. "
-    "Only include the number in your final response. @@@answer@@@ should not include any commas (,), percent signs (%),"
-    "money signs ($), or any ambiguous text. Only include the number like @@@-185000@@@. "
-    "The answer does not need to be your only output, just make sure that your final answer is wrapped in @@@. "
-    "Please also explain your answer, so if you get it wrong we can try to see where things went wrong."
+    "Do not use any special delimiters in your response. "
+    "Provide the final answer as a plain number only (no commas, percent signs, or currency symbols). "
+    "If you save money, it should be a positive number; if you lose money, make sure it is negative. "
+    "Also include a clear, concise explanation of how you arrived at the answer. "
+    "Use the Python tool to generate code to perform calculations. "
 )
 
 ASSISTANT_INSTRUCTIONS = (
     "You are trying to help people that are not very knowledgeable about finance answer questions about their mortgage. "
     "Answer the questions to the best of your ability, and make sure to get the calculations correct. "
-    "Format the answer like @@@answer_here@@@. For example, if your final answer was 158, you would include @@@158@@@. "
-    "Only include one instance of @@@xyz@@@ in your response as this will be used to automatically parse for your final answer. "
-    "Make sure to only wrap your final answer in @@@ and not anything else during your response. "
-    "Only include the number in your final response. @@@answer@@@ should not include any commas (,), percent signs (%),"
-    "money signs ($), or any ambiguous text. Only include the number like @@@-185000@@@. "
-    "The answer does not need to be your only output, just make sure that your final answer is wrapped in @@@. "
-    "Please also explain your answer, so if you get it wrong we can try to see where things went wrong. "
-    "If you save money, it should be a positive number, if you lose money, make sure it is negative. "
-    "You can use Python code to perform calculations and explain your reasoning."
+    "Do not use any special delimiters in your response. "
+    "Provide the final answer as a plain number only (no commas, percent signs, or currency symbols). "
+    "If you save money, it should be a positive number; if you lose money, make sure it is negative. "
+    "Also include a clear, concise explanation of how you arrived at the answer. "
 )
 
 
@@ -118,13 +112,21 @@ class AIModels(Enum):
     O1_PREVIEW = "o1-preview"
     GPT_4_5_PREVIEW = "gpt-4.5-preview"
     GPT_4_1 = "gpt-4.1"
+    GPT_5 = "gpt-5"
+    GPT_5_MINI = "gpt-5-mini"
+    GPT_5_NANO = "gpt-5-turbo"
+
+
+class QuestionOutput(BaseModel):
+    final_answer: str
+    explanation: str
 
 
 def run_ai_tests(
     question_list,
     num_iterations=1,
-    ai_model=AIModels.O3_MINI,
-    use_assistant=False,
+    ai_model=AIModels.GPT_5,
+    use_code_interpreter=False,
     output_file="ai_responses.json",
 ):
     """
@@ -133,25 +135,20 @@ def run_ai_tests(
         question_list (list): A list of dictionaries, each containing a 'content' key with the question text and an 'answer' key with the expected answer.
         num_iterations (int, optional): The number of times to repeat the test set. Defaults to 1.
         ai_model (str, optional): The identifier of the AI model to use for generating responses. o3-mini.
-        use_assistant: Whether or not to use the assistants API and thus the code interpreter
+        use_code_interpreter: Whether or not to enable code interpreter in OpenAI API
         output_file: The filename to output responses to
     Returns:
         list: A list of dictionaries, each containing:
             - 'question': The question text.
             - 'expected_answer': The expected answer for the question.
             - 'ai_response': The full response from the AI model.
+            - 'code': The code the AI model generated if applicable
             - 'actual_answer': The numeric answer extracted from the AI's response.
     """
 
     messages = [
         (
-            [
-                {
-                    "role": "system",
-                    "content": SYSTEM_MESSAGE,
-                },
-                {"role": msg["role"], "content": msg["content"]},
-            ],
+            [{"role": msg["role"], "content": msg["content"]}],
             idx + iteration * len(question_list),
         )
         for iteration in range(num_iterations)
@@ -159,67 +156,51 @@ def run_ai_tests(
     ]
 
     def get_response(message):
-        if use_assistant:
-            response = client.responses.create(
-                model=ai_model,
-                tools=[{"type": "code_interpreter", "container": {"type": "auto"}}],
-                instructions=ASSISTANT_INSTRUCTIONS,
-                input=message[0][1]["content"],
-            )
-            combined_text = ""
-            for item in response.output:
-                if hasattr(item, "content"):
-                    for content_item in item.content:
-                        if hasattr(content_item, "text"):
-                            combined_text += content_item.text + "\n"
-                elif hasattr(item, "code"):
-                    combined_text += item.code + "\n"
-            print(f"Finished question: {message[1]}")
-            return (combined_text, message[1])
-        else:
-            temperature = 1
-            max_completion_tokens = 20000
-            reasoning_effort = ["low", "medium", "high"]
-            response = client.chat.completions.create(
-                model=ai_model,
-                temperature=temperature,
-                # max_completion_tokens=max_completion_tokens,
-                messages=message[0],
-                # reasoning_effort=reasoning_effort[1]
-            )
-            print(f"Finished question: {message[1]}")
-            return (response.choices[0].message.content, message[1])
+        kwargs = {
+            "model": ai_model,
+            "input": message[0],
+            "tools": (
+                [{"type": "code_interpreter", "container": {"type": "auto"}}]
+                if use_code_interpreter
+                else []
+            ),
+            "instructions": (
+                ASSISTANT_INSTRUCTIONS_CODE
+                if use_code_interpreter
+                else ASSISTANT_INSTRUCTIONS
+            ),
+            "text_format": QuestionOutput,
+        }
 
-    print(f"Running {len(messages)} questions, with {ai_model}")
-    futures = [executor.submit(get_response, message) for message in messages]
-    responses_parallel = [future.result() for future in futures]
+        response = client.responses.parse(**kwargs)
 
-    print(f"Finished running {len(responses_parallel)} questions")
-    responses_parallel = sorted(responses_parallel, key=lambda x: x[1])
+        print(f"Finished question: {message[1]}")
+        return response.output_parsed, message[1]
 
-    def extract_answer(text):
-        match = re.search(r"@@@\s*(-?[\d,]+(?:\.\d+)?)(?=\s*@@@)", text)
-        if match:
-            return match.group(1)
-        return None
+    print(f"Running {len(messages)} questions with model {ai_model}")
 
-    answers = [extract_answer(resp[0]) for resp in responses_parallel]
+    max_threads = min(10, len(messages))
+    with ThreadPoolExecutor(max_workers=max_threads) as executor:
+        futures = [executor.submit(get_response, msg) for msg in messages]
+        responses_parallel = [future.result() for future in futures]
+
+    responses_parallel.sort(key=lambda x: x[1])
 
     results = []
     for idx, (resp, _) in enumerate(responses_parallel):
-        try:
-            actual_answer = float(answers[idx])
-        except (TypeError, ValueError):
-            actual_answer = None
+        question_data = question_list[idx % len(question_list)]
         result = {
-            "question": question_list[idx % len(question_list)]["content"],
-            "expected_answer": question_list[idx % len(question_list)]["answer"],
-            "ai_response": resp,
-            "actual_answer": actual_answer,
+            "question": question_data["content"],
+            "expected_answer": question_data["answer"],
+            "ai_response": getattr(resp, "explanation", None),
+            "actual_answer": getattr(resp, "final_answer", None),
         }
         results.append(result)
+
     with open(output_file, "w") as f:
         json.dump(results, f, indent=2)
+
+    print(f"Finished {len(results)} questions. Output saved to {output_file}")
     return results
 
 
@@ -227,22 +208,22 @@ ai_responses = run_ai_tests(
     questions_list,
     num_iterations=4,
     ai_model=AIModels.GPT_4_1.value,
-    use_assistant=True,
+    use_code_interpreter=True,
     output_file="assistant_with_python.json",
 )
 
-ai_responses = run_ai_tests(
-    questions_list,
-    num_iterations=4,
-    ai_model=AIModels.GPT_4_1.value,
-    use_assistant=False,
-    output_file="assistant_without_python.json",
-)
+# ai_responses = run_ai_tests(
+#     questions_list,
+#     num_iterations=4,
+#     ai_model=AIModels.GPT_4_1.value,
+#     use_code_interpreter=False,
+#     output_file="assistant_without_python.json",
+# )
 
-ai_responses = run_ai_tests(
-    questions_list,
-    num_iterations=4,
-    ai_model=AIModels.O4_MINI.value,
-    use_assistant=False,
-    output_file="o4-mini-responses.json",
-)
+# ai_responses = run_ai_tests(
+#     questions_list,
+#     num_iterations=4,
+#     ai_model=AIModels.O4_MINI.value,
+#     use_code_interpreter=False,
+#     output_file="o4-mini-responses.json",
+# )
