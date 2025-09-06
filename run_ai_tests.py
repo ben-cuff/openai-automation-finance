@@ -148,6 +148,7 @@ def run_ai_tests(
     if output_file:
         with open(output_file, "w") as f:
             json.dump(results, f, indent=2)
+        print(f"Output saved to {output_file}")
 
-    print(f"Finished {len(results)} questions. Output saved to {output_file}")
+    print(f"Finished {len(results)} questions.")
     return results
