@@ -3,7 +3,7 @@ from openai import OpenAI
 import dotenv
 import pandas as pd
 from pydantic import BaseModel
-from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
 import re
 import json
 from enum import Enum
@@ -11,7 +11,7 @@ from ai_models import *
 import time
 import random
 
-executor = ThreadPoolExecutor()
+executor = concurrent.futures.ThreadPoolExecutor()
 
 dotenv.load_dotenv()
 openai_api_key = dotenv.get_key(".env", "OPENAI_API_KEY")
@@ -105,17 +105,32 @@ def run_ai_tests(
         max_retries = 5
         retry_count = 0
         base_delay = 20
+        timeout_seconds = 300  # 5 minutes
 
         while True:
             try:
-                response = client.responses.parse(**kwargs)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(client.responses.parse, **kwargs)
+                    response = future.result(timeout=timeout_seconds)
+
                 print(f"Finished question: {message[1]}")
                 return response.output_parsed, message[1]
+
+            except concurrent.futures.TimeoutError:
+                if retry_count < max_retries:
+                    retry_count += 1
+                    delay = base_delay * (2 ** (retry_count - 1)) + random.uniform(0, 1)
+                    print(
+                        f"Request hung for {timeout_seconds}s, retrying in {delay:.2f}s "
+                        f"(attempt {retry_count}/{max_retries})"
+                    )
+                    time.sleep(delay)
+                else:
+                    raise TimeoutError(f"Request timed out after {timeout_seconds}s (max retries reached)")
+
             except Exception as e:
                 error_msg = str(e).lower()
-                if (
-                    "rate limit" in error_msg or "429" in error_msg
-                ) and retry_count < max_retries:
+                if ("rate limit" in error_msg and "429" in error_msg) and retry_count < max_retries:
                     retry_count += 1
                     delay = base_delay * (2 ** (retry_count - 1)) + random.uniform(0, 1)
                     print(
@@ -129,7 +144,7 @@ def run_ai_tests(
     print(f"Running {len(messages)} questions with model {ai_model}")
 
     max_threads = 1 if use_code_interpreter else min(10, len(messages))
-    with ThreadPoolExecutor(max_workers=max_threads) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
         futures = [executor.submit(get_response, msg) for msg in messages]
         responses_parallel = [future.result() for future in futures]
 
