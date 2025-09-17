@@ -90,7 +90,6 @@ def run_ai_tests(
             "input": message[0],
             "tools": (
                 [{"type": "code_interpreter", "container": container.id}]
-                # [{"type": "code_interpreter", "container": {"type": "auto"}}]
                 if use_code_interpreter
                 else []
             ),
@@ -113,8 +112,15 @@ def run_ai_tests(
                     future = executor.submit(client.responses.parse, **kwargs)
                     response = future.result(timeout=timeout_seconds)
 
-                print(f"Finished question: {message[1]}")
-                return response.output_parsed, message[1]
+                print(response)
+                token_usage = response.usage
+                print(
+                    f"Finished question: {message[1]} | "
+                    f"Input tokens: {token_usage.input_tokens}, "
+                    f"Output tokens: {token_usage.output_tokens}"
+                )
+
+                return response.output_parsed, token_usage, message[1]
 
             except concurrent.futures.TimeoutError:
                 if retry_count < max_retries:
@@ -126,11 +132,15 @@ def run_ai_tests(
                     )
                     time.sleep(delay)
                 else:
-                    raise TimeoutError(f"Request timed out after {timeout_seconds}s (max retries reached)")
+                    raise TimeoutError(
+                        f"Request timed out after {timeout_seconds}s (max retries reached)"
+                    )
 
             except Exception as e:
                 error_msg = str(e).lower()
-                if ("rate limit" in error_msg and "429" in error_msg) and retry_count < max_retries:
+                if (
+                    "rate limit" in error_msg and "429" in error_msg
+                ) and retry_count < max_retries:
                     retry_count += 1
                     delay = base_delay * (2 ** (retry_count - 1)) + random.uniform(0, 1)
                     print(
@@ -148,22 +158,33 @@ def run_ai_tests(
         futures = [executor.submit(get_response, msg) for msg in messages]
         responses_parallel = [future.result() for future in futures]
 
-    responses_parallel.sort(key=lambda x: x[1])
+    responses_parallel.sort(key=lambda x: x[2])
 
     results = []
-    for idx, (resp, _) in enumerate(responses_parallel):
+    total_input_tokens = 0
+    total_output_tokens = 0
+
+    for idx, (resp, usage, _) in enumerate(responses_parallel):
+        total_input_tokens += usage.get("input_tokens", 0)
+        total_output_tokens += usage.get("output_tokens", 0)
+
         question_data = question_list[idx % len(question_list)]
         result = {
             "question": question_data["content"],
             "expected_answer": question_data["answer"],
             "ai_response": getattr(resp, "explanation", None),
             "actual_answer": getattr(resp, "final_answer", None),
+            "usage": usage,
         }
         results.append(result)
+
     if output_file:
         with open(output_file, "w") as f:
             json.dump(results, f, indent=2)
         print(f"Output saved to {output_file}")
 
+    print(f"Total input tokens: {total_input_tokens}")
+    print(f"Total output tokens: {total_output_tokens}")
+    print(f"Total tokens: {total_input_tokens + total_output_tokens}")
     print(f"Finished {len(results)} questions.")
     return results

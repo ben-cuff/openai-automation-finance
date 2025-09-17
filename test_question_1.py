@@ -6,6 +6,9 @@ import logging
 import time
 
 
+output_file = "test_results_question_123.json"
+
+
 def generate_test_combinations(
     interest_rates, loan_amounts, loan_terms, code_capable_models, non_code_models
 ):
@@ -73,7 +76,6 @@ def run_tests_for_combinations(combinations):
             print(f"Error testing combination {combo}: {str(e)}")
             ai_response = {"error": str(e)}
         combo["ai_response"] = ai_response
-        output_file = "test_results_question_1.json"
         try:
             with open(output_file, "w") as f:
                 json.dump(combinations, f, indent=4)
@@ -83,21 +85,19 @@ def run_tests_for_combinations(combinations):
     return combinations
 
 
-interest_rates = list(range(1, 11))
-loan_amounts = list(range(300000, 1300000, 100000))
-loan_terms = [15, 30]
-# interest_rates = [4]
-# loan_amounts = [400000]
-# loan_terms = [30]
+# interest_rates = list(range(1, 11))
+# loan_amounts = list(range(300000, 1300000, 100000))
+# loan_terms = [15, 30]
+interest_rates = [2]
+loan_amounts = [1100000]
+loan_terms = [30]
 
 
 code_capable_models = [
-    AIModels.GPT_5.value,
-    AIModels.GPT_4O.value,
+    #     AIModels.GPT_5.value,
+    #     AIModels.GPT_4O.value,
 ]
-non_code_models = [
-    AIModels.O4_MINI.value,
-]
+non_code_models = [AIModels.O4_MINI.value]
 
 
 combinations = generate_test_combinations(
@@ -109,7 +109,6 @@ combinations_with_ai = run_tests_for_combinations(combinations)
 end_time = time.time()
 print(f"Total time to run: {end_time - start_time:.2f} seconds")
 
-output_file = "test_results_question_1.json"
 try:
     with open(output_file, "w") as f:
         json.dump(combinations_with_ai, f, indent=4)
